@@ -4,9 +4,13 @@ __pycache__/
 *$py.class
 
 # CAD extensions
-.bak
-.dwl
-.dwl2
+*.bak
+*.dwl
+*.dwl2
+
+# SAP2000 extensions
+*.ico
+*.sbk
 
 # C extensions
 *.so

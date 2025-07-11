@@ -5,6 +5,7 @@ import ezdxf
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import copy
 
 
 def from_list_to_dof(list):
@@ -88,6 +89,168 @@ def check_channels(channels, expected_channels) -> None:
     if extra:
         raise ValueError(
             f"ERROR | Unexpected channels as text: {sorted(extra)}")
+
+
+def round_6_sign_digits(number):
+    """
+    Function duties:
+        Rounds a float to 6 significant digits
+    """
+    formatted_number = "{:.6g}".format(number)
+    rounded_number = float(formatted_number)
+
+    return rounded_number
+
+
+
+def get_accelerometer_channels_from_forces(forces_setup):
+    """
+    Function Duties:
+        Processes nodal force data (e.g. from SAP2000) and builds a dictionary
+        of accelerometer channels with their location and measurement direction.
+
+    Input:
+        forces_setup : dict
+            Dictionary containing point force data:
+            - 'PointObj' : list of node names
+            - 'F1', 'F2', 'F3' : lists of force values in local axes 1, 2, 3
+
+    Output:
+        acc_channels : dict
+            Dictionary with structure:
+            {
+                'Channel_1': {'point': 'NodeA', 'dir': [±1, 0, 0]},
+                'Channel_2': {'point': 'NodeB', 'dir': [0, ±1, 0]},
+                ...
+            }
+            - Direction vector is aligned with the nonzero force component.
+            - Channel number is inferred from the absolute value of the force.
+    Notes:
+        - Each nonzero force component creates one channel.
+        - The output is sorted by channel number for consistency.
+    Remark:
+        For fully coherence, this function might be enhanced to totally match
+        the structure of get_SGs_positions_dictionary; for that, a new
+        get_point_forces function to obtain forces_setup would be required
+    """
+    point_ids = forces_setup['PointObj']
+    f1 = forces_setup['F1']
+    f2 = forces_setup['F2']
+    f3 = forces_setup['F3']
+    n_items_f1 = len([i for i in range(len(f1)) if f1[i] != 0])
+    n_items_f2 = len([i for i in range(len(f2)) if f2[i] != 0])
+    n_items_f3 = len([i for i in range(len(f3)) if f3[i] != 0])
+    n_items = n_items_f1 + n_items_f2 + n_items_f3
+
+    acc_channels = dict()
+    for i in range(len(point_ids)):
+
+        if f1[i] != 0:
+            direction = [0, 0, 0]
+            direction[0] = int(np.sign(f1[i]))
+            channel_id = int(abs(f1[i]))
+            acc_channels[f'Channel_{channel_id}'] = {
+                'point': point_ids[i],
+                'dir': direction
+            }
+        if f2[i] != 0:
+            direction = [0, 0, 0]
+            direction[1] = int(np.sign(f2[i]))
+            channel_id = int(abs(f2[i]))
+            acc_channels[f'Channel_{channel_id}'] = {
+                'point': point_ids[i],
+                'dir': direction
+            }
+        if f3[i] != 0:
+            direction = [0, 0, 0]
+            direction[2] = int(np.sign(f3[i]))
+            channel_id = int(abs(f3[i]))
+            acc_channels[f'Channel_{channel_id}'] = {
+                'point': point_ids[i],
+                'dir': direction
+            }
+
+    sorted_items = sort_string_separated_by(list(acc_channels), separator='_')
+    acc_channels = {key: acc_channels[key] for key in sorted_items}
+
+    # Assign direction (i.e. U1, U2...)
+    acc_channels = add_direction_to_acc_channels(acc_channels)
+
+    return acc_channels
+
+
+
+def add_direction_to_acc_channels(channels):
+    """
+    Function Duties:
+    - Add the 'direction' of the accelerometers to the channels dictionary.
+    Input:
+        channels: a dictionary containing 'dir' key, which is like
+        [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], or [0, 0, -1].
+    Output:
+        channels_with_direction: a copy of the input dictionary with an additional
+        'direction' key for each channel, containing the direction as a str.
+        e.g. if [-1, 0, 0] -> '-U1' -> , if [0, 1, 0] -> 'U2', etc.
+    """
+    channels_with_direction = copy.deepcopy(channels)
+    for ch in list(channels_with_direction):
+        dir_vec = channels_with_direction[ch]['dir']
+        if dir_vec[0] == 1:
+            channels_with_direction[ch]['direction'] = 'U1'
+        elif dir_vec[1] == 1:
+            channels_with_direction[ch]['direction'] = 'U2'
+        elif dir_vec[2] == 1:
+            channels_with_direction[ch]['direction'] = 'U3'
+        elif dir_vec[0] == -1:
+            channels_with_direction[ch]['direction'] = '-U1'
+        elif dir_vec[1] == -1:
+            channels_with_direction[ch]['direction'] = '-U2'
+        elif dir_vec[2] == -1:
+            channels_with_direction[ch]['direction'] = '-U3'
+
+    return channels_with_direction
+
+
+def sort_list_string(list_str):
+    """
+    Function duties:
+        Convert a list of string-numbers, that can start by "~",
+        into a sorted list.
+    Example:
+        list_str = ['6', '7', '~3', None, '~5', '~10']
+        sorted_list = ['6', '7', '~3', '~5', '~10', None]
+    """
+    none_elements = len([i for i in list_str if i is None])
+    list_str = [i for i in list_str if i is not None]
+    if isinstance(list_str[0], float):
+        sorted_list = sorted(list_str)
+    else:
+        regular_numbers = [s for s in list_str if not s.startswith('~')]
+        tilde_numbers = [s for s in list_str if s.startswith('~')]
+        regular_numbers = sorted(regular_numbers, key=lambda x: float(x))
+        tilde_numbers = sorted(tilde_numbers, key=lambda x: float(x[1:]))
+        sorted_list = regular_numbers + tilde_numbers
+
+    sorted_list += [None]*none_elements
+
+    return sorted_list
+
+
+def sort_string_separated_by(str_list, separator='_'):
+    """
+    Function Duties:
+        Sorts a string with numbers separated by a separator
+        example: ['Element_1', 'Element_10', 'Element_2'] ->
+            -> ['Element_1', 'Element_2', 'Element_10']
+    Input:
+        str_list: list of strings
+        separator: character that separates numbers in the strings
+    Output:
+        str_sorted: sorted list of strings
+    """
+    str_sorted = sorted(str_list, key=lambda x: int(x.split(separator)[-1]))
+
+    return str_sorted
 
 
 def point_key(point):
