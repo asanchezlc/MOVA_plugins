@@ -3,6 +3,11 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# CAD extensions
+.bak
+.dwl
+.dwl2
+
 # C extensions
 *.so
 
