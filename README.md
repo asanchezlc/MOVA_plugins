@@ -15,8 +15,8 @@ MOVA_plugins/
 ├── src/                    # Source code
 │   ├── examples/           # Example use cases and scripts
 │   ├── helpers/            # Auxiliary modules and utilities
-│   └── files/              # I/O scripts for MOVA files
-│       └── Geometry_from_AutoCAD.py
+│   └── file_i.py           # I/O scripts for MOVA files
+│
 └── README.md               # Project description and usage
 ```
 ## Example Plugin
